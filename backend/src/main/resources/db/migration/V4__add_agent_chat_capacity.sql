@@ -1,0 +1,3 @@
+ALTER TABLE agent
+ADD COLUMN active_chat_count INT NOT NULL DEFAULT 0,
+ADD COLUMN max_active_chats INT NOT NULL DEFAULT 3;

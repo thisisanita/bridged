@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+
+# IntelliJ IDEA
+.idea/
+**/.idea/
+*.iws
+*.iml
+*.ipr
+
+# Maven
+**/target/
+
+# Maven Wrapper
+**/.mvn/wrapper/maven-wrapper.jar
+
+# Spring Tool Suite
+**/.apt_generated/
+**/.classpath
+**/.factorypath
+**/.project
+**/.settings/
+**/.springBeans
+**/.sts4-cache/
+
+# NetBeans
+**/nbproject/private/
+**/nbbuild/
+**/dist/
+**/nbdist/
+**/.nb-gradle/
+
+# VS Code
+**/.vscode/
+
+# Local environment / secrets
+**/.env
+**/.env.*
+**/application-local.properties
+**/application-local.yml
+**/application-local.yaml
+
+# Spring Initializr help file
+**/HELP.md
