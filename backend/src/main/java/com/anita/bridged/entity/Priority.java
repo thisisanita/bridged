@@ -19,6 +19,9 @@ public class Priority {
     @Column(name = "priority", nullable = false, unique = true, length = 30)
     private String priority;
 
+    @Column(name = "assignment_target_minutes", nullable = false)
+    private  Integer assignmentTargetMinutes;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -44,6 +47,14 @@ public class Priority {
 
     public void setPriority(String priority) {
         this.priority = priority;
+    }
+
+    public Integer getAssignmentTargetMinutes() {
+        return assignmentTargetMinutes;
+    }
+
+    public void setAssignmentTargetMinutes(Integer assignmentTargetMinutes) {
+        this.assignmentTargetMinutes = assignmentTargetMinutes;
     }
 
     public LocalDateTime getCreatedAt() {

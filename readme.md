@@ -109,7 +109,6 @@ The application begins as a single Spring Boot deployment while keeping responsi
 
 - Spring WebSocket
 - React
-- In-memory queue for MVP assignment processing
 - AWS SQS as a later asynchronous queue implementation
 - AWS EC2 deployment
 
@@ -151,7 +150,7 @@ The assignment mechanism is intended to consider both suitability and fairness r
 
 For example, an agent may be eligible based on language and skill requirements, but the final selection should also consider their existing workload and capacity.
 
-The detailed assignment algorithm will be implemented in a later development phase.
+The MVP assignment policy has been designed and will be implemented in a later development phase. It uses a PostgreSQL-backed waiting pool and a fixed, interleaved priority cycle. See [Agent Assignment Routing Design](docs/agent-assignment-routing-design.md) for the decision and its tradeoffs.
 
 ## Queue Design
 
@@ -159,7 +158,7 @@ For the MVP, pending chats will initially be handled without introducing externa
 
 A later version is planned to use AWS SQS to manage pending conversation work items.
 
-The queue will contain conversations waiting for assignment rather than individual chat messages. PostgreSQL will remain the source of truth for chat sessions and message history.
+The queue consists of `WAITING` chat-session rows in PostgreSQL rather than an in-memory data structure. PostgreSQL remains the source of truth for waiting chats, assignments, and message history.
 
 ## Real-Time Messaging
 
@@ -168,6 +167,14 @@ WebSocket support will be introduced once the basic chat lifecycle and assignmen
 REST APIs will handle operations such as creating and retrieving chat sessions, while WebSocket connections will handle the real-time exchange of messages between customers and agents.
 
 Messages received through WebSocket will still be persisted to PostgreSQL.
+
+## Deferred Until After MVP Deployment
+
+- Automated tests for assignment, capacity, deadlines, lifecycle, and concurrency
+- PostgreSQL index for `assignment_due_at`
+- Query-plan and performance verification
+- Full SLA aging and escalation features
+- Updating the assignment routing design document from the discarded fixed-cycle approach to deadline-based routing
 
 ## Project Structure
 

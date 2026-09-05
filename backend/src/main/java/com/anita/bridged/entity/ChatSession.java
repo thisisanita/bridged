@@ -42,6 +42,9 @@ public class ChatSession {
     @Column(name = "triage_completed_at")
     private LocalDateTime triageCompletedAt;
 
+    @Column(name = "assignment_due_at")
+    private LocalDateTime assignmentDueAt;
+
     @Column(name = "assigned_at")
     private LocalDateTime assignedAt;
 
@@ -136,6 +139,14 @@ public class ChatSession {
 
     public void setTriageCompletedAt(LocalDateTime triageCompletedAt) {
         this.triageCompletedAt = triageCompletedAt;
+    }
+
+    public LocalDateTime getAssignmentDueAt() {
+        return assignmentDueAt;
+    }
+
+    public void setAssignmentDueAt(LocalDateTime assignmentDueAt) {
+        this.assignmentDueAt = assignmentDueAt;
     }
 
     public LocalDateTime getAssignedAt() {

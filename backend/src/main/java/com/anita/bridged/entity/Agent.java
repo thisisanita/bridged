@@ -29,11 +29,11 @@ public class Agent {
     @JoinColumn(name = "availability_status_id", nullable = false)
     private AvailabilityStatus availabilityStatus;
 
-    @Column(name = "active_chat_count", nullable = false)
-    private Integer activeChatCount;
+    @Column(name = "open_chat_count", nullable = false)
+    private Integer openChatCount;
 
-    @Column(name = "max_active_chats", nullable = false)
-    private Integer maxActiveChats;
+    @Column(name = "max_open_chats", nullable = false)
+    private Integer maxOpenChats;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -89,20 +89,20 @@ public class Agent {
         this.availabilityStatus = availabilityStatus;
     }
 
-    public Integer getActiveChatCount() {
-        return activeChatCount;
+    public Integer getOpenChatCount() {
+        return openChatCount;
     }
 
-    public void setActiveChatCount(Integer activeChatCount) {
-        this.activeChatCount = activeChatCount;
+    public void setOpenChatCount(Integer openChatCount) {
+        this.openChatCount = openChatCount;
     }
 
-    public Integer getMaxActiveChats() {
-        return maxActiveChats;
+    public Integer getMaxOpenChats() {
+        return maxOpenChats;
     }
 
-    public void setMaxActiveChats(Integer maxActiveChats) {
-        this.maxActiveChats = maxActiveChats;
+    public void setMaxOpenChats(Integer maxOpenChats) {
+        this.maxOpenChats = maxOpenChats;
     }
 
     public LocalDateTime getCreatedAt() {

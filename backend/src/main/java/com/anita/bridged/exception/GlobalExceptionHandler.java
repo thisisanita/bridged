@@ -53,4 +53,17 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
+    @ExceptionHandler(AgentNotFoundException.class)
+    public ProblemDetail handleAgentNotFound(
+            AgentNotFoundException exception) {
+
+        ProblemDetail problemDetail =
+                ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+
+        problemDetail.setTitle("Agent not found");
+        problemDetail.setDetail(exception.getMessage());
+
+        return problemDetail;
+    }
+
 }

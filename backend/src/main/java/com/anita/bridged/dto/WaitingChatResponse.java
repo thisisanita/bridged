@@ -5,29 +5,32 @@ import java.time.LocalDateTime;
 public class WaitingChatResponse {
     private Long chatId;
     private Long customerId;
-    private String chatStatus;
+    private String status;
     private String topicSkill;
     private String priority;
     private String preferredLanguage;
     private LocalDateTime triageCompletedAt;
     private LocalDateTime createdAt;
+    private LocalDateTime assignmentDueAt;
 
     public WaitingChatResponse(Long chatId,
                                Long customerId,
-                               String chatStatus,
+                               String status,
                                String topicSkill,
                                String priority,
                                String preferredLanguage,
                                LocalDateTime triageCompletedAt,
-                               LocalDateTime createdAt) {
+                               LocalDateTime createdAt,
+                               LocalDateTime assignmentDueAt) {
         this.chatId = chatId;
         this.customerId = customerId;
-        this.chatStatus = chatStatus;
+        this.status = status;
         this.topicSkill = topicSkill;
         this.priority = priority;
         this.preferredLanguage = preferredLanguage;
         this.triageCompletedAt = triageCompletedAt;
         this.createdAt = createdAt;
+        this.assignmentDueAt = assignmentDueAt;
     }
 
     public Long getChatId() {
@@ -38,8 +41,8 @@ public class WaitingChatResponse {
         return customerId;
     }
 
-    public String getChatStatus() {
-        return chatStatus;
+    public String getStatus() {
+        return status;
     }
 
     public String getTopicSkill() {
@@ -60,5 +63,9 @@ public class WaitingChatResponse {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public LocalDateTime getAssignmentDueAt() {
+        return assignmentDueAt;
     }
 }
