@@ -3,6 +3,7 @@ package com.anita.bridged.entity;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "chat_message")
@@ -23,6 +24,9 @@ public class ChatMessage {
     @ManyToOne
     @JoinColumn(name = "sender_user_id")
     private User senderUser;
+
+    @Column(name = "client_message_id")
+    private UUID clientMessageId;
 
     @Column(name = "message_type", nullable = false)
     private String messageType = "TEXT";
@@ -66,6 +70,14 @@ public class ChatMessage {
 
     public void setSenderUser(User senderUser) {
         this.senderUser = senderUser;
+    }
+
+    public UUID getClientMessageId() {
+        return clientMessageId;
+    }
+
+    public void setClientMessageId(UUID clientMessageId) {
+        this.clientMessageId = clientMessageId;
     }
 
     public String getMessageType() {

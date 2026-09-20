@@ -3,9 +3,12 @@ package com.anita.bridged.repository;
 import com.anita.bridged.entity.Language;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface LanguageRepository extends JpaRepository<Language, Long> {
 
     Optional<Language> findByLanguage(String language);
+
+    List<Language> findAllByOrderByLanguageAsc();
 }

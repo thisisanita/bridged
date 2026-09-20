@@ -6,17 +6,15 @@ public class CreateChatResponse {
     private String customerName;
     private String status;
     private String preferredLanguage;
+    private ChatMessageResponse initialMessage;
 
-    public CreateChatResponse (Long chatId,
-                               Long customerId,
-                               String customerName,
-                               String status,
-                               String preferredLanguage) {
+    public CreateChatResponse(Long chatId, Long customerId, String customerName, String status, String preferredLanguage, ChatMessageResponse initialMessage) {
         this.chatId = chatId;
         this.customerId = customerId;
         this.customerName = customerName;
         this.status = status;
         this.preferredLanguage = preferredLanguage;
+        this.initialMessage = initialMessage;
     }
 
     public Long getChatId() {
@@ -39,4 +37,7 @@ public class CreateChatResponse {
         return preferredLanguage;
     }
 
+    public ChatMessageResponse getInitialMessage() {
+        return initialMessage;
+    }
 }

@@ -19,17 +19,24 @@ public class ChatService {
     private final SkillRepository skillRepository;
     private final LanguageRepository languageRepository;
     private final AgentRepository agentRepository;
+    private final ChatMessageRepository chatMessageRepository;
+    private final SenderTypeRepository senderTypeRepository;
+    private final ChatMessageService chatMessageService;
 
-    public ChatService(ChatSessionRepository chatSessionRepository, CustomerRepository customerRepository, ChatStatusRepository chatStatusRepository, SkillRepository skillRepository, LanguageRepository languageRepository, AgentRepository agentRepository) {
+    public ChatService(ChatSessionRepository chatSessionRepository, CustomerRepository customerRepository, ChatStatusRepository chatStatusRepository, SkillRepository skillRepository, LanguageRepository languageRepository, AgentRepository agentRepository, ChatMessageRepository chatMessageRepository, SenderTypeRepository senderTypeRepository, ChatMessageService chatMessageService) {
         this.chatSessionRepository = chatSessionRepository;
         this.customerRepository = customerRepository;
         this.chatStatusRepository = chatStatusRepository;
         this.skillRepository = skillRepository;
         this.languageRepository = languageRepository;
         this.agentRepository = agentRepository;
+        this.chatMessageRepository = chatMessageRepository;
+        this.senderTypeRepository = senderTypeRepository;
+        this.chatMessageService = chatMessageService;
     }
 
     //Create Chat
+    @Transactional
     public CreateChatResponse createChat(Long customerId) {
         Customer customer = customerRepository
                 .findById(customerId)
@@ -39,70 +46,40 @@ public class ChatService {
                 .findByStatus("TRIAGE")
                 .orElseThrow(() -> new ReferenceDataNotFoundException("Required chat status not found: TRIAGE"));
 
+        SenderType botSenderType = senderTypeRepository
+                .findBySender("BOT")
+                .orElseThrow(()-> new ReferenceDataNotFoundException(
+                        "Required sender type not found: BOT"
+                ));
+
         ChatSession chatSession = new ChatSession();
         chatSession.setCustomer(customer);
         chatSession.setChatStatus(triageStatus);
-        chatSession.setPreferredLanguage(customer.getPreferredLanguage());
 
         ChatSession savedChatSession = chatSessionRepository.save(chatSession);
+
+        ChatMessage languagePrompt = new ChatMessage();
+        languagePrompt.setChatSession(savedChatSession);
+        languagePrompt.setSenderType(botSenderType);
+        languagePrompt.setSenderUser(null);
+        languagePrompt.setMessageType("BOT_MESSAGE");
+        languagePrompt.setContent("Which language would you prefer?");
+        languagePrompt.setCreatedAt(LocalDateTime.now());
+
+        ChatMessage savedLanguagePrompt = chatMessageRepository.save(languagePrompt);
+
+
         CreateChatResponse createChatResponse = new CreateChatResponse(savedChatSession.getChatId(),
                                                                         savedChatSession.getCustomer().getCustomerId(),
                                                                         savedChatSession.getCustomer().getFullName(),
                                                                         savedChatSession.getChatStatus().getStatus(),
-                                                                        savedChatSession.getPreferredLanguage().getLanguage()
+                                                                        null,
+                                                                        chatMessageService.toResponse(savedLanguagePrompt)
+
         );
 
         return createChatResponse;
 
-    }
-
-    //Complete Triage
-    public CompleteTriageResponse completeTriage (Long chatId, CompleteTriageRequest request) {
-        ChatSession chatSession = chatSessionRepository
-                .findById(chatId)
-                .orElseThrow(() -> new ChatNotFoundException(chatId));
-
-        if (!chatSession.getChatStatus().getStatus().equals("TRIAGE")) {
-            throw new InvalidChatStateException("Chat " + chatId + " cannot complete triage because it is currently "
-            + chatSession.getChatStatus().getStatus());
-        }
-
-        Skill skill = skillRepository
-                .findBySkillName(request.getSkillName())
-                .orElseThrow(() -> new InvalidTriageSelectionException("Invalid triage skill: " + request.getSkillName()));
-
-        Language language = languageRepository
-                .findByLanguage(request.getLanguage())
-                .orElseThrow(() -> new InvalidTriageSelectionException("Invalid triage language: " + request.getLanguage()));
-
-
-        ChatStatus chatStatus = chatStatusRepository
-                .findByStatus("WAITING")
-                .orElseThrow(() -> new ReferenceDataNotFoundException("Required chat status not found: WAITING"));
-
-        LocalDateTime triageCompletedAt = LocalDateTime.now();
-        LocalDateTime assignmentDueAt = triageCompletedAt.plusMinutes(skill.getPriority().getAssignmentTargetMinutes());
-
-        chatSession.setTopicSkill(skill);
-        chatSession.setPreferredLanguage(language);
-        chatSession.setChatStatus(chatStatus);
-        chatSession.setPriority(skill.getPriority());
-        chatSession.setTriageCompletedAt(triageCompletedAt);
-        chatSession.setAssignmentDueAt(assignmentDueAt);
-
-        ChatSession savedChatSession = chatSessionRepository.save(chatSession);
-
-        CompleteTriageResponse completeTriageResponse = new CompleteTriageResponse(
-                savedChatSession.getChatId(),
-                savedChatSession.getChatStatus().getStatus(),
-                savedChatSession.getTopicSkill().getSkillName(),
-                savedChatSession.getPriority().getPriority(),
-                savedChatSession.getPreferredLanguage().getLanguage(),
-                savedChatSession.getTriageCompletedAt(),
-                savedChatSession.getAssignmentDueAt()
-        );
-
-        return completeTriageResponse;
     }
 
     public List<WaitingChatResponse> listWaitingChats() {
@@ -292,6 +269,184 @@ public class ChatService {
                 .stream()
                 .map(this::toChatDetailsResponse)
                 .toList();
+    }
+
+    @Transactional
+    public SelectLanguageResponse selectLanguage(
+            Long chatId,
+            SelectLanguageRequest request
+    ) {
+        ChatSession chatSession = chatSessionRepository
+                .findByIdForUpdate(chatId)
+                .orElseThrow(() -> new ChatNotFoundException(chatId));
+
+        String currentStatus = chatSession.getChatStatus().getStatus();
+
+        if (!"TRIAGE".equals(currentStatus)) {
+            throw new InvalidChatStateException(
+                    "Chat " + chatId
+                            + " cannot select a language because it is currently "
+                            + currentStatus
+            );
+        }
+
+        if (chatSession.getPreferredLanguage() != null) {
+            throw new InvalidTriageSelectionException(
+                    "A language has already been selected for chat " + chatId
+            );
+        }
+
+        Language selectedLanguage = languageRepository
+                .findByLanguage(request.language())
+                .orElseThrow(() -> new InvalidTriageSelectionException(
+                        "Invalid triage language: " + request.language()
+                ));
+
+        chatSession.setPreferredLanguage(selectedLanguage);
+
+        SenderType customerSenderType = senderTypeRepository
+                .findBySender("CUSTOMER")
+                .orElseThrow(() -> new ReferenceDataNotFoundException(
+                        "Required sender type not found: CUSTOMER"
+                ));
+
+        ChatMessage customerLanguageMessage = new ChatMessage();
+        customerLanguageMessage.setChatSession(chatSession);
+        customerLanguageMessage.setSenderUser(chatSession.getCustomer().getUser());
+        customerLanguageMessage.setSenderType(customerSenderType);
+        customerLanguageMessage.setMessageType("TEXT");
+        customerLanguageMessage.setCreatedAt(LocalDateTime.now());
+        customerLanguageMessage.setContent(selectedLanguage.getLanguage());
+
+        ChatMessage savedCustomerLanguageMessage = chatMessageRepository.save(customerLanguageMessage);
+
+        SenderType botSenderType = senderTypeRepository
+                .findBySender("BOT")
+                .orElseThrow(() -> new ReferenceDataNotFoundException(
+                        "Required sender type not found: BOT"
+                ));
+
+        ChatMessage topicPrompt = new ChatMessage();
+        topicPrompt.setChatSession(chatSession);
+        topicPrompt.setSenderUser(null);
+        topicPrompt.setSenderType(botSenderType);
+        topicPrompt.setMessageType("BOT_MESSAGE");
+        topicPrompt.setContent("What do you need help with today?");
+        topicPrompt.setCreatedAt(LocalDateTime.now());
+
+        ChatMessage savedTopicPrompt = chatMessageRepository.save(topicPrompt);
+
+        return new SelectLanguageResponse(
+                chatSession.getChatId(),
+                chatSession.getChatStatus().getStatus(),
+                selectedLanguage.getLanguage(),
+                List.of(
+                        chatMessageService.toResponse(savedCustomerLanguageMessage),
+                        chatMessageService.toResponse(savedTopicPrompt)
+                )
+        );
+    }
+
+    @Transactional
+    public SelectTopicResponse selectTopic(
+            Long chatId,
+            SelectTopicRequest request
+    ) {
+        ChatSession chatSession = chatSessionRepository
+                .findByIdForUpdate(chatId)
+                .orElseThrow(() -> new ChatNotFoundException(chatId));
+
+        String currentStatus = chatSession.getChatStatus().getStatus();
+
+        if (!"TRIAGE".equals(currentStatus)) {
+            throw new InvalidChatStateException(
+                    "Chat " + chatId
+                            + " cannot select a topic because it is currently "
+                            + currentStatus
+            );
+        }
+
+        if (chatSession.getPreferredLanguage() == null) {
+            throw new InvalidTriageSelectionException(
+                    "A language must be selected before choosing a topic"
+            );
+        }
+
+        if (chatSession.getTopicSkill() != null) {
+            throw new InvalidTriageSelectionException(
+                    "A topic has already been selected for chat " + chatId
+            );
+        }
+
+        Skill selectedSkill = skillRepository
+                .findBySkillName(request.skillName())
+                .orElseThrow(() -> new InvalidTriageSelectionException(
+                        "Invalid triage topic: " + request.skillName()
+                ));
+
+        ChatStatus waitingStatus = chatStatusRepository
+                .findByStatus("WAITING")
+                .orElseThrow(() -> new ReferenceDataNotFoundException(
+                        "Required chat status not found: WAITING"
+                ));
+
+        LocalDateTime triageCompletedAt = LocalDateTime.now();
+        LocalDateTime assignmentDueAt = triageCompletedAt.plusMinutes(selectedSkill.getPriority().getAssignmentTargetMinutes());
+
+        chatSession.setTopicSkill(selectedSkill);
+        chatSession.setPriority(selectedSkill.getPriority());
+        chatSession.setChatStatus(waitingStatus);
+        chatSession.setTriageCompletedAt(triageCompletedAt);
+        chatSession.setAssignmentDueAt(assignmentDueAt);
+
+        SenderType customerSenderType = senderTypeRepository
+                .findBySender("CUSTOMER")
+                .orElseThrow(()-> new ReferenceDataNotFoundException(
+                        "Required sender type not found: CUSTOMER"
+                ));
+
+        ChatMessage customerTopicMessage = new ChatMessage();
+        customerTopicMessage.setChatSession(chatSession);
+        customerTopicMessage.setSenderUser(chatSession.getCustomer().getUser());
+        customerTopicMessage.setSenderType(customerSenderType);
+        customerTopicMessage.setMessageType("TEXT");
+        customerTopicMessage.setContent(selectedSkill.getSkillName());
+        customerTopicMessage.setCreatedAt(LocalDateTime.now());
+
+        ChatMessage savedCustomerTopicMessage = chatMessageRepository.save(customerTopicMessage);
+
+        SenderType botSenderType = senderTypeRepository
+                .findBySender("BOT")
+                .orElseThrow(() -> new ReferenceDataNotFoundException(
+                        "Required sender type not found: BOT"
+                ));
+
+        ChatMessage waitingMessage = new ChatMessage();
+        waitingMessage.setChatSession(chatSession);
+        waitingMessage.setSenderUser(null);
+        waitingMessage.setSenderType(botSenderType);
+        waitingMessage.setMessageType("BOT_MESSAGE");
+        waitingMessage.setContent(
+                "We are finding the right agent for you now."
+        );
+
+        waitingMessage.setCreatedAt(LocalDateTime.now());
+
+        ChatMessage savedWaitingMessage = chatMessageRepository.save(waitingMessage);
+
+        return new SelectTopicResponse(
+                chatSession.getChatId(),
+                chatSession.getChatStatus().getStatus(),
+                selectedSkill.getSkillName(),
+                selectedSkill.getPriority().getPriority(),
+                chatSession.getPreferredLanguage().getLanguage(),
+                triageCompletedAt,
+                assignmentDueAt,
+                List.of(
+                        chatMessageService.toResponse(savedCustomerTopicMessage),
+                        chatMessageService.toResponse(savedWaitingMessage)
+                )
+        );
     }
 
 }

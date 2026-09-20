@@ -66,4 +66,29 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
+    @ExceptionHandler(ChatAccessDeniedException.class)
+    public ProblemDetail handleChatAccessDenied(
+            ChatAccessDeniedException exception
+    ) {
+        ProblemDetail problemDetail =
+                ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
+
+        problemDetail.setTitle("Chat access denied");
+        problemDetail.setDetail(exception.getMessage());
+
+        return problemDetail;
+    }
+
+    @ExceptionHandler(InvalidDemoSessionException.class)
+    public ProblemDetail handleInvalidDemoSession(
+            InvalidDemoSessionException exception
+    ) {
+        ProblemDetail problemDetail =
+                ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+
+        problemDetail.setTitle("Invalid demo session");
+        problemDetail.setDetail(exception.getMessage());
+
+        return problemDetail;
+    }
 }

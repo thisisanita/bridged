@@ -21,13 +21,6 @@ public class ChatController {
         return chatService.createChat(customerId);
     }
 
-    @PatchMapping("/chats/{chatId}/triage")
-    public CompleteTriageResponse completeTriage (
-            @PathVariable("chatId") Long chatId,
-            @RequestBody CompleteTriageRequest request) {
-        return chatService.completeTriage(chatId, request);
-    }
-
     @GetMapping("/chats/waiting")
     public List<WaitingChatResponse> listWaitingChats() {
         return chatService.listWaitingChats();
@@ -50,5 +43,22 @@ public class ChatController {
             @PathVariable("chatId") Long chatId) {
         return chatService.getChatDetails(chatId);
     }
+
+    @PatchMapping("/chats/{chatId}/triage/language")
+    public SelectLanguageResponse selectLanguage(
+            @PathVariable("chatId") Long chatId,
+            @RequestBody SelectLanguageRequest request
+    ) {
+        return chatService.selectLanguage(chatId, request);
+    }
+
+    @PatchMapping("/chats/{chatId}/triage/topic")
+    public SelectTopicResponse selectTopic(
+        @PathVariable("chatId") Long chatId,
+        @RequestBody SelectTopicRequest request
+        ) {
+            return chatService.selectTopic(chatId, request);
+
+        }
 
 }

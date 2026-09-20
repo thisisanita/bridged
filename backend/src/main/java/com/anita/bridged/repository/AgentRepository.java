@@ -56,4 +56,6 @@ public interface AgentRepository extends JpaRepository<Agent, Long> {
     Optional<Agent> findByIdForUpdate(
             @Param("agentId") Long agentId
     );
+
+    Optional<Agent> findByUser_UserId(Long userId);
 }
