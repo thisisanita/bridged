@@ -35,11 +35,11 @@ function GatewayPage({ onSessionReady }) {
     <main className="gateway-page">
       <section className="gateway-introduction">
         <div className="brand-mark">B</div>
-        <p className="eyebrow">Bridged banking support</p>
-        <h1>Get help from the right person, faster.</h1>
+        <p className="eyebrow">Bridged support platform</p>
+        <h1>Customer support routing and messaging</h1>
         <p>
-          Choose a demo role and enter a seeded user ID
-          to continue.
+          A demonstration of automated chat assignment and
+          real-time communication.
         </p>
       </section>
 
@@ -48,7 +48,7 @@ function GatewayPage({ onSessionReady }) {
           className="gateway-form"
           onSubmit={handleSubmit}
         >
-          <h2>Enter the demo</h2>
+          <h2>Enter Demo</h2>
 
           <LoginFields
             role={role}
