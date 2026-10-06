@@ -1,93 +1,201 @@
 # Bridged
 
-Bridged is a personal software engineering project for a real-time customer support chat platform that connects customers with suitable support agents based on factors such as language, skill, availability, and workload.
+Bridged is a full-stack customer-support chat platform that routes customers
+to suitable support agents based on language, skill, availability, capacity
+and workload.
 
-I am building the project to deepen my experience with modern Java backend development, real-time communication, asynchronous processing, relational database design, and system design.
-
-The project is being developed incrementally, starting with the core chat domain and REST APIs before introducing real-time messaging, agent assignment, and deployment infrastructure.
+The project demonstrates backend development with Spring Boot, transactional
+agent assignment, real-time WebSocket messaging, relational database design
+and deployment on AWS.
 
 ## Current Status
 
-Bridged is currently under active development.
+Bridged has a working end-to-end MVP deployed on AWS.
 
-The backend currently includes:
+The current application supports:
 
-- Spring Boot application with PostgreSQL integration
-- Database schema managed using Flyway migrations
-- JPA entities and repositories for the core chat domain
-- Seeded MVP users, customers, agents, skills, and reference data
-- Chat session creation
-- Chat triage flow
-- REST endpoints for the initial chat lifecycle
-- Validation and exception handling
+- A React interface for customers and support agents
+- Temporary role-based demo sessions
+- Customer chat creation
+- Separate language and topic triage
+- Priority-based assignment deadlines
+- Automatic agent assignment
+- Agent matching by skill, language, availability and capacity
+- Workload and proficiency-based agent ranking
+- Real-time customer-agent messaging using STOMP over WebSocket
+- PostgreSQL-persisted message history
+- Agent acceptance of assigned chats
+- Chat closure and capacity release
+- Flyway-managed database migrations and seed data
+- Deployment using AWS EC2, PostgreSQL RDS, Nginx and systemd
 
-Authentication, real-time messaging, agent assignment, frontend integration, and cloud deployment are planned for later stages.
+## Chat Lifecycle
 
-## Intended Chat Flow
+A conversation moves through the following states:
 
-A customer conversation will move through the following lifecycle:
-
+```text
 TRIAGE → WAITING → ASSIGNED → ACTIVE → CLOSED
+```
 
 ### 1. Triage
 
-A customer starts a chat and provides information such as the issue they need help with and their preferred language.
+A customer starts a chat and selects:
+
+- Their preferred language
+- The topic they need help with
+
+Language and topic are saved separately so that each selection is persisted
+as soon as it is submitted.
+
+The initial prompts, customer selections and bot responses are also stored as
+individual chat messages.
 
 ### 2. Waiting
 
-Once triage is complete, the conversation enters the waiting pool until an appropriate support agent can be selected.
+After both triage selections have been completed, the chat enters the
+PostgreSQL-backed waiting pool.
+
+The selected topic determines the chat priority and assignment deadline.
 
 ### 3. Assignment
 
-The assignment system will evaluate eligible agents using factors including:
+A scheduled backend process checks the waiting pool every two seconds and
+attempts to assign one chat.
 
-- Availability
-- Required skills
-- Language proficiency
-- Current workload
-- Agent capacity
-- Fairness across eligible agents
-- Chat priority
+Waiting chats are ordered by:
 
-The goal is to avoid simply routing every conversation to the most highly skilled agent while still ensuring customers are matched appropriately.
+1. Earliest assignment deadline
+2. Earliest triage completion time
+3. Chat ID as a deterministic tie-breaker
+
+An agent is eligible when the agent:
+
+- Is available
+- Has remaining chat capacity
+- Supports the required language
+- Has the required skill
+
+Eligible agents are ranked by:
+
+1. Lowest workload percentage
+2. Highest skill proficiency
+3. Highest language proficiency
+4. Agent ID as a deterministic tie-breaker
+
+PostgreSQL transactions, pessimistic locking and `SKIP LOCKED` protect the
+assignment process from concurrent workers assigning the same chat or agent
+capacity.
 
 ### 4. Active Chat
 
-Once assigned, the customer and agent will communicate in real time using WebSocket connections.
+An assigned agent accepts the chat, moving it from `ASSIGNED` to `ACTIVE`.
 
-Chat messages will be persisted in PostgreSQL so that the database remains the source of truth for conversation history.
+The customer and agent exchange messages using STOMP over WebSocket. Messages
+are persisted in PostgreSQL before being delivered to subscribers, keeping the
+database as the source of truth for conversation history.
+
+The REST API can retrieve recent messages when a client initially connects or
+needs to recover conversation history.
 
 ### 5. Closed
 
-The chat session is closed once the customer interaction has been completed.
+The assigned agent can close an active chat.
+
+Closing the chat:
+
+- Changes its status to `CLOSED`
+- Records the closure time
+- Reduces the agent's open-chat count
+- Releases capacity for another assignment
+
+## Assignment Deadlines
+
+Each priority has a target assignment time:
+
+| Priority | Assignment target |
+|---|---:|
+| CRITICAL | 5 minutes |
+| HIGH | 10 minutes |
+| NORMAL | 20 minutes |
+| LOW | 30 minutes |
+
+The assignment deadline is calculated when triage is completed. This allows
+the queue to prioritize chats using actual waiting deadlines rather than a
+fixed priority cycle.
+
+## Engineering Challenges and Decisions
+
+### End-to-End Development
+
+Bridged was developed from initial requirements and database modelling through
+backend and frontend implementation to cloud deployment. Several technologies,
+including Spring Boot, WebSockets and AWS deployment, were new to me.
+
+A major learning experience was understanding how the REST API, real-time
+messaging, PostgreSQL database, React state and cloud infrastructure interact
+as one system.
+
+### Workload-Aware Agent Assignment
+
+The initial agent model did not track open-chat workload. During design
+discussions, it became clear that ranking agents only by proficiency could
+cause the most skilled agents to receive most of the work.
+
+The agent model was updated with `open_chat_count` and `max_open_chats`.
+Assignment now filters agents by language, skill, availability and capacity,
+then ranks eligible agents by workload before proficiency. This provides
+fairer workload distribution while still considering agent capability.
+
+The queue design also evolved from a fixed weighted-priority cycle to
+deadline-based routing. Each priority receives an assignment target, allowing
+the system to process chats according to their actual assignment deadlines.
+
+### Concurrency and Consistency
+
+Concurrent scheduler executions could otherwise assign the same chat more
+than once or exceed an agent's capacity. The assignment process therefore
+uses database transactions, pessimistic row locking and PostgreSQL
+`SKIP LOCKED`.
+
+Chat assignment and agent workload updates occur within the same transaction.
+
+### Local and Cloud Environment Differences
+
+The local and deployed databases maintain independent data and identity
+sequences, so user, agent and chat IDs are not guaranteed to match between
+environments.
+
+A timezone difference was also discovered between the local machine and EC2.
+Because `LocalDateTime` does not contain an offset, newly deployed messages
+could be sorted incorrectly. The MVP aligns the JVM timezone with Singapore,
+while a future version should store timestamps using `Instant` or
+`OffsetDateTime`.
 
 ## Architecture
 
-Bridged is intentionally being developed as a modular monolithic application rather than as a collection of microservices.
+Bridged is implemented as a modular monolith.
 
-The planned high-level architecture is:
-
+```text
 Customer / Agent
-|
-v
-React Frontend
-|
-| REST + WebSocket
-v
-Spring Boot Backend
-|
-+---- Chat & Triage
-|
-+---- Assignment
-|
-+---- Real-time Messaging
-|
-+---- Queue Processing
-|
-v
+        |
+        v
+React + Vite frontend
+        |
+        | REST and STOMP over WebSocket
+        v
+Spring Boot backend
+        |
+        +-- Chat and triage
+        +-- Automatic assignment
+        +-- Real-time messaging
+        +-- Chat lifecycle management
+        |
+        v
 PostgreSQL
+```
 
-The application begins as a single Spring Boot deployment while keeping responsibilities separated within the codebase. This keeps the project manageable while still allowing individual components to evolve later.
+The application remains a single backend deployment while keeping controllers,
+services, repositories and domain entities separated by responsibility.
 
 ## Technology Stack
 
@@ -95,26 +203,71 @@ The application begins as a single Spring Boot deployment while keeping responsi
 
 - Java 21
 - Spring Boot
-- Spring Web / REST
+- Spring Web
 - Spring Data JPA
 - Hibernate
+- Spring WebSocket
+- STOMP
 - Maven
 - Flyway
+
+### Frontend
+
+- React
+- Vite
+- JavaScript
+- CSS
+- STOMP.js
 
 ### Database
 
 - PostgreSQL
+- PostgreSQL row locking and `SKIP LOCKED`
 
-### Planned
+### Deployment
 
-- Spring WebSocket
-- React
-- AWS SQS as a later asynchronous queue implementation
-- AWS EC2 deployment
+- AWS EC2
+- PostgreSQL on AWS RDS
+- Nginx
+- systemd
+
+## Deployment Approach
+
+The MVP is currently deployed manually on AWS:
+
+- The React production build is served by Nginx on an EC2 instance.
+- Nginx proxies REST requests under `/api` and WebSocket connections under
+  `/ws` to Spring Boot.
+- The Spring Boot JAR runs as a `systemd` service and restarts automatically.
+- PostgreSQL runs on a private AWS RDS instance.
+- Database credentials and runtime configuration are stored on EC2 and are
+  not committed to the repository.
+- Flyway applies database migrations when the backend starts.
+
+The repository currently describes the deployed architecture but does not yet
+include deployment scripts, Nginx and systemd templates, or
+infrastructure-as-code definitions. Reproducing the environment therefore
+requires manual configuration.
+
+## Main API Capabilities
+
+The REST API supports:
+
+- Creating a customer chat
+- Selecting a triage language
+- Selecting a triage topic
+- Listing waiting chats
+- Retrieving chat details
+- Retrieving an agent's open chats
+- Accepting an assigned chat
+- Closing an active chat
+- Retrieving recent messages
+- Retrieving language and skill reference data
+- Creating temporary demo sessions
+
+WebSocket messaging is used for real-time customer-agent communication.
 
 ## Database Design
-
-The database models customers, agents, their capabilities, and customer support conversations.
 
 Core entities include:
 
@@ -129,52 +282,20 @@ Core entities include:
 - ChatSession
 - ChatMessage
 
-Reference data is used for concepts such as:
+Reference data is used for:
 
 - User roles
-- User status
+- User statuses
 - Agent availability
-- Chat status
-- Chat priority
+- Chat statuses
+- Chat priorities
 - Languages
 - Skills
 - Proficiency levels
+- Message sender types
 
-Database schema changes are managed through versioned Flyway migrations, while JPA/Hibernate is used to map the relational model to Java entities.
-
-## Agent Assignment
-
-Agent routing is one of the main system-design components of Bridged.
-
-The assignment mechanism is intended to consider both suitability and fairness rather than selecting an agent based only on skill proficiency.
-
-For example, an agent may be eligible based on language and skill requirements, but the final selection should also consider their existing workload and capacity.
-
-The MVP assignment policy has been designed and will be implemented in a later development phase. It uses a PostgreSQL-backed waiting pool and a fixed, interleaved priority cycle. See [Agent Assignment Routing Design](docs/agent-assignment-routing-design.md) for the decision and its tradeoffs.
-
-## Queue Design
-
-For the MVP, pending chats will initially be handled without introducing external queue infrastructure.
-
-A later version is planned to use AWS SQS to manage pending conversation work items.
-
-The queue consists of `WAITING` chat-session rows in PostgreSQL rather than an in-memory data structure. PostgreSQL remains the source of truth for waiting chats, assignments, and message history.
-
-## Real-Time Messaging
-
-WebSocket support will be introduced once the basic chat lifecycle and assignment flow are established.
-
-REST APIs will handle operations such as creating and retrieving chat sessions, while WebSocket connections will handle the real-time exchange of messages between customers and agents.
-
-Messages received through WebSocket will still be persisted to PostgreSQL.
-
-## Deferred Until After MVP Deployment
-
-- Automated tests for assignment, capacity, deadlines, lifecycle, and concurrency
-- PostgreSQL index for `assignment_due_at`
-- Query-plan and performance verification
-- Full SLA aging and escalation features
-- Updating the assignment routing design document from the discarded fixed-cycle approach to deadline-based routing
+Database changes and seeded MVP data are managed through versioned Flyway
+migrations.
 
 ## Project Structure
 
@@ -182,15 +303,144 @@ Messages received through WebSocket will still be persisted to PostgreSQL.
 bridged/
 ├── backend/
 │   ├── src/main/java/com/anita/bridged/
+│   │   ├── config/
 │   │   ├── controller/
 │   │   ├── dto/
 │   │   ├── entity/
 │   │   ├── exception/
 │   │   ├── repository/
+│   │   ├── scheduler/
 │   │   └── service/
-│   │
 │   └── src/main/resources/
 │       ├── db/migration/
 │       └── application.properties
-│
-└── frontend/                # Planned
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   └── utils/
+│   └── package.json
+└── docs/
+```
+
+## Running Locally
+
+### Requirements
+
+- Java 21
+- Maven, or the included Maven wrapper
+- Node.js and npm
+- PostgreSQL
+
+### Backend
+
+Configure the required PostgreSQL connection values for your environment.
+
+Then run:
+
+```bash
+cd backend
+./mvnw spring-boot:run
+```
+
+The backend runs on:
+
+```text
+http://localhost:8080
+```
+
+### Frontend
+
+In a separate terminal, run:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend normally runs on:
+
+```text
+http://localhost:5173
+```
+
+During local development, Vite proxies `/api` and `/ws` requests to the
+Spring Boot backend on port `8080`.
+
+## Building and Testing
+
+Run the backend tests and build:
+
+```bash
+cd backend
+./mvnw clean package
+```
+
+Run frontend linting and create a production build:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+The frontend production files are written to:
+
+```text
+frontend/dist/
+```
+
+## Current MVP Limitations
+
+- Demo sessions are not secure authentication.
+- Users can currently provide a seeded user ID to enter the demo.
+- Active customer chats are not restored after a browser refresh.
+- The customer interface does not yet prevent multiple simultaneous chats.
+- Assignment updates still rely partly on lifecycle polling.
+- The current time model uses `LocalDateTime` and depends on consistent server
+  timezone configuration.
+- Automated test coverage is currently limited.
+- Scheduling is enabled during Spring context tests.
+- The AWS environment and application deployment are currently configured
+  manually rather than reproduced from version-controlled infrastructure code.
+- The deployment currently uses HTTP rather than HTTPS.
+- The application is a portfolio MVP and is not production-safe for real
+  banking or customer data.
+
+## Post-MVP Roadmap
+
+- Add authentication and role-based authorization
+- Restore active chats after browser refresh
+- Prevent duplicate active customer chats
+- Add assignment, capacity, lifecycle and concurrency tests
+- Disable the assignment scheduler under the test profile
+- Add an index for `assignment_due_at`
+- Verify database query plans and assignment performance
+- Replace `LocalDateTime` with `Instant` or `OffsetDateTime`
+- Deliver assignment updates through WebSocket
+- Add an operational queue and agent-workload dashboard
+- Add HTTPS and a stable domain
+- Add redacted Nginx and systemd configuration templates
+- Add repeatable frontend and backend deployment scripts
+- Add an environment-variable template containing placeholders
+- Define AWS infrastructure using Terraform, CloudFormation or AWS CDK
+- Document backup, rollback and disaster-recovery procedures
+- Add monitoring, metrics and production security controls
+- Add SLA aging and escalation rules
+- Evaluate an external queue such as AWS SQS if future scale requires it
+- Update the assignment design documentation to match deadline-based routing
+
+## Project Purpose
+
+Bridged is a personal portfolio project built to develop practical experience
+with:
+
+- Transactional backend design
+- Concurrent resource assignment
+- Real-time browser communication
+- PostgreSQL data modelling
+- Full-stack application development
+- AWS deployment
+- Incremental system design and technical trade-offs
